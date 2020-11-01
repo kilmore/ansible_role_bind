@@ -1,0 +1,96 @@
+---
+# tasks file for dns
+- name: include assert.yml
+  include_tasks: assert.yml
+  run_once: yes
+
+- name: install dns
+  package:
+    name: "{{ dns_packages }}"
+    state: present
+
+- name: create directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+  loop:
+    - path: "{{ dns_datadir }}"
+      mode: "0750"
+      owner: "{{ dns_owner }}"
+      group: "{{ dns_group }}"
+    - path: "{{ dns_confdir }}"
+      mode: "0755"
+      owner: root
+      group: root
+
+- name: create group
+  group:
+    name: "{{ dns_group }}"
+    state: present
+
+- name: create user
+  user:
+    name: "{{ dns_owner }}"
+    state: present
+    system: yes
+
+- name: generate rndc key
+  command: rndc-confgen -a -c "{{ dns_confdir }}/rndc.key"
+  args:
+    creates: "{{ dns_confdir }}/rndc.key"
+
+- name: set permissions on rndc key file
+  file:
+    path: "{{ dns_confdir }}/rndc.key"
+    owner: "{{ dns_owner }}"
+    group: "{{ dns_group }}"
+    mode: "0640"
+
+- name: get the hints/root file
+  get_url:
+    url: https://www.internic.net/domain/named.root
+    dest: "{{ dns_datadir }}/named.root"
+    validate_certs: "{{ dns_validate_certs }}"
+    mode: "0640"
+    owner: "{{ dns_owner }}"
+    group: "{{ dns_group }}"
+  when:
+    - dns_caching_dns | bool
+  notify:
+    reload zones
+
+- name: create zone files
+  template:
+    src: zone.j2
+    dest: "{{ dns_datadir }}/{{ item.name }}.conf"
+    mode: "0640"
+    owner: "{{ dns_owner }}"
+    group: "{{ dns_group }}"
+  loop: "{{ dns_zones }}"
+  when:
+    - item.type is undefined or
+      item.type == "master"
+  notify:
+    reload zones
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: add zones to configuration
+  template:
+    src: named.conf.j2
+    dest: "{{ dns_confdir }}/named.conf"
+    validate: named-checkconf -zj %s
+    mode: "0640"
+    owner: "{{ dns_owner }}"
+    group: "{{ dns_group }}"
+  notify:
+    reload configuration
+
+- name: start and enable dns
+  service:
+    name: "{{ dns_service }}"
+    state: started
+    enabled: yes
