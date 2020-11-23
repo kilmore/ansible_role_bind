@@ -4,5 +4,36 @@
   become: yes
   gather_facts: yes
 
-  roles:
-    - role: ansible-role-dns
+  tasks:
+    - name: Include Bind
+      include_role:
+        name: bind 
+  
+  vars: 
+    dns_zones:
+    - name: localhost
+      soa: localhost
+      serial: 1
+      refresh: 604800
+      retry: 86400
+      expire: 2419200
+      ttl: 604800
+      records:
+        - name: "@"
+          type: NS
+          value: localhost.
+        - name: "@"
+          value: 127.0.0.1
+        - name: "@"
+          type: AAAA
+          value: ::1
+
+    - name: 127.in-addr.arpa
+      ttl: 604800
+      records:
+        - name: "@"
+          type: NS
+          value: localhost.
+        - name: 1.0.0
+          type: PTR
+          value: localhost.
