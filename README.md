@@ -1,5 +1,4 @@
-# [dns](#dns)
-
+# Bind Role
 Install and configure a master DNS server. Does not yet support primary and secondary. 
 
 
